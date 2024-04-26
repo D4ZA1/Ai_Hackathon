@@ -1,28 +1,37 @@
 # Description: This file contains the code for the blockchain implementation
+import random
+
 from flask import Flask, render_template, request, jsonify
 import networkx as nx
 import matplotlib.pyplot as plt
-from .wallet import *
+from wallet import *
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
-import mysql
+import mysql.connector
+from utils import *
 
-from .utils import *
+
+import json
+import os
 app = Flask(__name__)
+# Define the path to the JSON file
+VEHICLES_FILE = 'vehicles.json'
+RELATIONS_FILE = 'relations.json'
+def load_data(file):
+    if os.path.exists(file):
+        with open(file, 'r') as f:
+            return json.load(f)
+    else:
+        return []
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="root",
-    database="blockchain"
-)
-cursor = db.cursor()
+def save_data(data, file):
+    with open(file, 'w') as f:
+        json.dump(data, f)
+
 def calculate_energy_token(data):
     # Implementation depends on your specific requirements
-    return len(data)  # For example, the number of energy tokens could be the length of the data
-
-
+    return random.randint(1, 100)
 
 def add_block(data, previous_hash, wallet, energy_token, state):
     block = {
@@ -30,7 +39,7 @@ def add_block(data, previous_hash, wallet, energy_token, state):
         'previous_hash': previous_hash,
         'wallet': wallet,
         'energy_token': {
-            'amount': energy_token,
+            'token': energy_token,
             'state': state
         }
     }
@@ -50,152 +59,242 @@ def should_change_to_passive(transaction):
     return False
 
 def check_token_state():
-    cursor.execute("SELECT * FROM vehicles")
-    vehicles = cursor.fetchall()
+    vehicles = load_data(VEHICLES_FILE)
 
     for vehicle in vehicles:
-        wallet = json.loads(vehicle[1])
+        wallet = vehicle['Wallet']
         for transaction in wallet['transactions']:
             if transaction['energy_token']['state'] == 'ACTIVE':
                 # Check if the token should be changed to 'PASSIVE'
                 if should_change_to_passive(transaction):  # You need to implement this function
                     transaction['energy_token']['state'] = 'PASSIVE'
-                    cursor.execute("UPDATE vehicles SET Wallet = %s WHERE VehicleID = %s", (json.dumps(wallet), vehicle[0]))
-                    db.commit()
+                    save_data(vehicles, VEHICLES_FILE)
+
+def add_block_to_chain(blockchain, data, wallet):
+    energy_token = calculate_energy_token(data)
+    state = "ACTIVE"
+    previous_hash = hashlib.sha256(data.encode()).hexdigest() if blockchain else '0'
+    block = add_block(data, previous_hash, wallet, energy_token, state)
+    blockchain.append(block)
+    return blockchain
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_token_state, 'interval', minutes=1)
 scheduler.start()
+@app.route('/view_wallet', methods=['GET', 'POST'])
+def view_wallet():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        vehicles = load_data(VEHICLES_FILE)
+        for vehicle in vehicles:
+            if vehicle['Wallet']['username'] == username and vehicle['Wallet']['password'] == password:
+                wallet_info = {
+                    'username': vehicle['Wallet']['username'],
+                    'balance': vehicle['Wallet']['balance'],
+                    'transactions': vehicle['Wallet']['transactions']
+                }
+                return jsonify(wallet_info)
+        return "Invalid credentials"
+    else:
+        return render_template('view_wallet.html')
+@app.route('/buy_tokens', methods=['GET', 'POST'])
+def buy_tokens():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        num_tokens = int(request.form['num_tokens'])
+
+        vehicles = load_data(VEHICLES_FILE)
+        for vehicle in vehicles:
+            if vehicle['Wallet']['username'] == username and vehicle['Wallet']['password'] == password:
+                vehicle['Wallet']['balance'] += num_tokens
+                transaction = {
+                    'type': 'buy',
+                    'amount': num_tokens,
+                    'timestamp': time.time()  # You need to import the time module
+                }
+                vehicle['Wallet'] = add_transaction(vehicle['Wallet'], transaction)
+
+                # Add block to blockchain
+                blockchain = load_data('blockchain.json')
+                data = f"{vehicle['VehicleID']}-{vehicle['Wallet']}-{vehicle['EncryptedData']}"
+                blockchain = add_block_to_chain(blockchain, data, vehicle['Wallet'])
+                save_data(blockchain, 'blockchain.json')
+
+                save_data(vehicles, VEHICLES_FILE)
+                return "Tokens bought successfully"
+    else:
+        return render_template('buy_tokens.html')
+
 
 
 @app.route('/')
 def index():
-    return render_template('input.html')
+    return render_template('index.html')
 
-@app.route('/update_records', methods=['POST'])
+@app.route('/generate_blockchain', methods=['GET', 'POST'])
+def generate_blockchain():
+    if request.method == 'POST':
+        vehicles = load_data(VEHICLES_FILE)
 
+        blockchain = []
+        previous_hash = '0'
+        for vehicle in vehicles:
+            data = f"{vehicle['VehicleID']}-{vehicle['Wallet']}-{vehicle['EncryptedData']}"
+            wallet = vehicle['Wallet']
+            energy_token = calculate_energy_token(data)
+            state = "ACTIVE"
+            block = add_block(data, previous_hash, wallet, energy_token, state)
+            blockchain.append(block)
+            previous_hash = hashlib.sha256(data.encode()).hexdigest()
+
+        return jsonify(blockchain)
+    else:
+        return render_template('generate_blockchain.html')
+@app.route('/verify_blockchain', methods=['GET', 'POST'])
+def verify_blockchain_route():
+    if request.method == 'POST':
+        blockchain = request.json
+        result = verify_blockchain(blockchain)
+        return jsonify(result)
+    else:
+        blockchain = load_data('blockchain.json')
+        result = verify_blockchain(blockchain)
+        return jsonify(result)
+
+
+@app.route('/create_wallet', methods=['GET', 'POST'])
+def create_wallet():
+    if request.method == 'POST':
+        vehicle_id = request.form['vehicle_id']
+        vehicle_details = request.form['vehicle_details']
+        username = request.form['username']
+        password = request.form['password']
+
+        wallet = generate_wallet(username, password)
+        encrypted_data = encrypt_data(vehicle_details, wallet['public_key'])
+
+        vehicles = load_data(VEHICLES_FILE)
+        vehicles.append({
+            'VehicleID': vehicle_id,
+            'Wallet': wallet,
+            'EncryptedData': encrypted_data
+        })
+        save_data(vehicles, VEHICLES_FILE)
+
+        return "Wallet created successfully"
+    else:
+        return render_template('create_wallet.html')
+
+@app.route('/update_records', methods=['GET', 'POST'])
 def update_records():
-    group_id = request.form['group_id']
-    vehicle_id = request.form['vehicle_id']
-    vehicle_details = request.form['vehicle_details']
+    if request.method == 'POST':
+        group_id = request.form['group_id']
+        vehicle_id = request.form['vehicle_id']
+        vehicle_details = request.form['vehicle_details']
 
-    private_key, public_key = generate_key_pair()
-    private_key_hex = serialize_private_key(private_key)
-    public_key_hex = serialize_public_key(public_key)
+        private_key, public_key = generate_key_pair()
+        public_key_hex = serialize_public_key(public_key)
 
-    encrypted_data = encrypt_data(vehicle_details, public_key)
+        encrypted_data = encrypt_data(vehicle_details, public_key)
 
-    cursor.execute("INSERT INTO vehicles (GroupID, VehicleID, PublicKey, EncryptedData) VALUES (%s, %s, %s, %s)", (group_id, vehicle_id, public_key_hex, encrypted_data))
-    db.commit()
+        vehicles = load_data(VEHICLES_FILE)
+        for vehicle in vehicles:
+            if vehicle['VehicleID'] == vehicle_id:
+                vehicle['GroupID'] = group_id
+                vehicle['PublicKey'] = public_key_hex
+                vehicle['EncryptedData'] = encrypted_data
+                break
+        else:
+            vehicles.append({
+                'GroupID': group_id,
+                'VehicleID': vehicle_id,
+                'PublicKey': public_key_hex,
+                'EncryptedData': encrypted_data
+            })
+        save_data(vehicles, VEHICLES_FILE)
 
-    return "Data added successfully"
+        return "Data added successfully"
+    else:
+        return render_template('update_records.html')
 
 @app.route('/add_group_vehicle_relation', methods=['POST'])
 def add_group_vehicle_relation():
     group_id = request.form['group_id']
     vehicle_id = request.form['vehicle_id']
 
-    cursor.execute("SELECT GroupID, VehicleID FROM relations WHERE GroupID = %s AND VehicleID = %s", (group_id, vehicle_id))
-    existing_relation = cursor.fetchone()
+    relations = load_data(RELATIONS_FILE)
+
+    existing_relation = next((relation for relation in relations if relation['GroupID'] == group_id and relation['VehicleID'] == vehicle_id), None)
 
     if existing_relation:
         return "Relation already exists"
 
-    cursor.execute("SELECT GroupID FROM groups WHERE GroupID = %s", (group_id,))
-    group_data = cursor.fetchone()
+    vehicles = load_data(VEHICLES_FILE)
 
-    cursor.execute("SELECT VehicleID FROM vehicles WHERE VehicleID = %s", (vehicle_id,))
-    vehicle_data = cursor.fetchone()
+    vehicle_data = next((vehicle for vehicle in vehicles if vehicle['VehicleID'] == vehicle_id), None)
 
-    if not group_data or not vehicle_data:
-        return "Invalid group or vehicle"
+    if not vehicle_data:
+        return "Invalid vehicle"
 
-    cursor.execute("INSERT INTO relations (GroupID, VehicleID) VALUES (%s, %s)", (group_id, vehicle_id))
-    db.commit()
+    relations.append({
+        'GroupID': group_id,
+        'VehicleID': vehicle_id
+    })
+    save_data(relations, RELATIONS_FILE)
 
     return "Relation added successfully"
 
-@app.route('/generate_blockchain', methods=['POST'])
-def generate_blockchain():
-    cursor.execute("SELECT * FROM vehicles")
-    vehicles = cursor.fetchall()
+#
+# @app.route('/generate_merkle_tree', methods=['POST'])
+# def generate_merkle_tree_route():
+#     data = request.json
+#     tree = generate_merkle_tree(data)
+#     return jsonify(tree)
+#
+# @app.route('/verify_merkle_tree', methods=['POST'])
+# def verify_merkle_tree_route():
+#     data = request.json['data']
+#     root = request.json['root']
+#     result = verify_merkle_tree(data, root)
+#     return jsonify(result)
 
-    blockchain = []
-    previous_hash = '0'
-    for vehicle in vehicles:
-        data = f"{vehicle[0]}-{vehicle[1]}-{vehicle[2]}"
-        wallet = json.loads(vehicle[1])
-        energy_token = calculate_energy_token(data)  # function to calculate energy tokens
-        block = add_block(data, previous_hash, wallet, energy_token)
-        blockchain.append(block)
-        previous_hash = hashlib.sha256(data.encode()).hexdigest()
-
-    return jsonify(blockchain)
-@app.route('/verify_blockchain', methods=['POST'])
-def verify_blockchain_route():
-    blockchain = request.json
-    result = verify_blockchain(blockchain)
-    return jsonify(result)
-
-@app.route('/generate_merkle_tree', methods=['POST'])
-def generate_merkle_tree_route():
-    data = request.json
-    tree = generate_merkle_tree(data)
-    return jsonify(tree)
-
-@app.route('/verify_merkle_tree', methods=['POST'])
-def verify_merkle_tree_route():
-    data = request.json['data']
-    root = request.json['root']
-    result = verify_merkle_tree(data, root)
-    return jsonify(result)
 
 @app.route('/generate_graph', methods=['POST'])
 def generate_graph():
-    cursor.execute("SELECT * FROM relations")
-    relations = cursor.fetchall()
+    relations = load_data(RELATIONS_FILE)
 
     G = nx.DiGraph()
     for relation in relations:
-        G.add_edge(relation[0], relation[1])
+        G.add_edge(relation['GroupID'], relation['VehicleID'])
 
     nx.draw(G, with_labels=True)
     plt.savefig('graph.png')
 
     return "Graph generated successfully"
 
-@app.route('/create_wallet', methods=['POST'])
-def create_wallet():
-    vehicle_id = request.form['vehicle_id']
-    vehicle_details = request.form['vehicle_details']
-
-    wallet = generate_wallet()
-    encrypted_data = encrypt_data(vehicle_details, wallet['public_key'])
-
-    cursor.execute("INSERT INTO vehicles (VehicleID, Wallet, EncryptedData) VALUES (%s, %s, %s)", (vehicle_id, json.dumps(wallet), encrypted_data))
-    db.commit()
-
-    return "Wallet created successfully"
-
-@app.route('/generate_blockchain', methods=['POST'])
-def generate_blockchain():
-    cursor.execute("SELECT * FROM vehicles")
-    vehicles = cursor.fetchall()
-
-    blockchain = []
-    previous_hash = '0'
-    for vehicle in vehicles:
-        data = f"{vehicle[0]}-{vehicle[1]}-{vehicle[2]}"
-        wallet = json.loads(vehicle[1])
-        energy_token = calculate_energy_token(data)
-        state = "ACTIVE"
-        block = add_block(data, previous_hash, wallet, energy_token, state)
-        blockchain.append(block)
-        previous_hash = hashlib.sha256(data.encode()).hexdigest()
-
-    return jsonify(blockchain)
+@app.route('/view_blockchain', methods=['GET'])
+def view_blockchain():
+    blockchain = load_data('blockchain.json')
+    return render_template('view_blockchain.html', blockchain=blockchain)
 
 
 if __name__ == '__main__':
-    scheduler.start()
+    # Load existing blockchain or create a new one if it doesn't exist
+    if os.path.exists('blockchain.json'):
+        with open('blockchain.json', 'r') as f:
+            blockchain = json.load(f)
+    else:
+        blockchain = []
+
+    # Only add blocks for vehicles that are not already in the blockchain
+    vehicles = load_data(VEHICLES_FILE)
+    for vehicle in vehicles:
+        data = f"{vehicle['VehicleID']}-{vehicle['Wallet']}-{vehicle['EncryptedData']}"
+        if not any(block['data'] == data for block in blockchain):
+            blockchain = add_block_to_chain(blockchain, data, vehicle['Wallet'])
+
+    save_data(blockchain, 'blockchain.json')
     app.run(debug=True)

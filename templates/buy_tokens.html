@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buy Tokens</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            padding: 20px 0;
+        }
+        form {
+            width: 200px;
+            margin: 0 auto;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            margin-top: 10px;
+            padding: 10px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Buy Tokens</h1>
+    <form id="buyTokensForm">
+        <label for="username">Username:</label><br>
+        <input type="text" id="username" name="username"><br>
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password"><br>
+        <label for="num_tokens">Number of Tokens:</label><br>
+        <input type="number" id="num_tokens" name="num_tokens"><br>
+        <input type="submit" value="Buy Tokens">
+    </form>
+    <div id="message"></div>
+    <script>
+        $(document).ready(function(){
+            $("#buyTokensForm").submit(function(event){
+                event.preventDefault();
+                var username = $("#username").val();
+                var password = $("#password").val();
+                var num_tokens = $("#num_tokens").val();
+                $.post("/buy_tokens", {username: username, password: password, num_tokens: num_tokens}, function(data){
+                    $("#message").html(data);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

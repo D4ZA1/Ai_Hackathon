@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Wallet</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            padding: 20px 0;
+        }
+        form {
+            width: 200px;
+            margin: 0 auto;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            margin-top: 10px;
+            padding: 10px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Create Wallet</h1>
+    <form action="/create_wallet" method="post">
+        <label for="username">Username:</label><br>
+        <input type="text" id="username" name="username"><br>
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password"><br>
+        <label for="vehicle_id">Vehicle ID:</label><br>
+        <input type="text" id="vehicle_id" name="vehicle_id"><br>
+        <label for="vehicle_details">Vehicle Details:</label><br>
+        <input type="text" id="vehicle_details" name="vehicle_details"><br>
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>

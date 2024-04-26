@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>View Blockchain</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Blockchain</h1>
+    <table>
+        <tr>
+            <th>Block</th>
+            <th>Previous Hash</th>
+            <th>Wallet Username</th>
+            <th>Energy Token</th>
+            <th>Energy Token State</th>
+        </tr>
+        {% for block in blockchain %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ block['previous_hash'] }}</td>
+            <td>{{ block['wallet']['username'] }}</td>
+            <td>{{ block['energy_token']['token'] }}</td>
+            <td>{{ block['energy_token']['state'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

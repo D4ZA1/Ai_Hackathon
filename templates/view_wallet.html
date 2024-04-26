@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>View Wallet</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            padding: 20px 0;
+        }
+        form {
+            width: 200px;
+            margin: 0 auto;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            margin-top: 10px;
+            padding: 10px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+    #walletInfo {
+        border: 1px solid #333;
+        padding: 10px;
+        margin-top: 20px;
+        background-color: #fff;
+        color: #333;
+        width: 50%;
+        margin: 20px auto;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        div {
+            background-color: #f0f0f0;
+        }
+    </style>
+
+</head>
+<body>
+    <h1>View Wallet</h1>
+    <form id="walletForm">
+        <label for="username">Username:</label><br>
+        <input type="text" id="username" name="username"><br>
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password"><br>
+        <input type="submit" value="View Wallet">
+    </form>
+    <div id="walletInfo"></div>
+    <script>
+        $(document).ready(function(){
+            $("#walletForm").submit(function(event){
+                event.preventDefault();
+                var username = $("#username").val();
+                var password = $("#password").val();
+                $.post("/view_wallet", {username: username, password: password}, function(data){
+                    var formattedData = JSON.stringify(data, null, 4);  // Format the JSON data with 4 spaces of indentation
+                    var html = '<table><tr><th>Transaction Type</th><th>Amount</th><th>Timestamp</th></tr>';
+                    for (var i = 0; i < data.transactions.length; i++) {
+                        html += '<tr><td>' + data.transactions[i].type + '</td><td>' + data.transactions[i].amount + '</td><td>' + new Date(data.transactions[i].timestamp * 1000).toLocaleString() + '</td></tr>';
+                    }
+                    html += '</table>';
+                    $("#walletInfo").html(html);  // Use the <pre> tag to preserve the formatting
+                });
+            });
+        });
+    </script>
+</body>
+</html>
