@@ -1,6 +1,5 @@
 from .utils import *
-from flask import request, jsonify
-import mysql.connector
+
 
 def generate_wallet():
     private_key, public_key = generate_key_pair()

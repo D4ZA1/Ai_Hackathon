@@ -6,6 +6,7 @@ from .wallet import *
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
+import mysql
 
 from .utils import *
 app = Flask(__name__)
@@ -186,8 +187,8 @@ def generate_blockchain():
     for vehicle in vehicles:
         data = f"{vehicle[0]}-{vehicle[1]}-{vehicle[2]}"
         wallet = json.loads(vehicle[1])
-        energy_token = calculate_energy_token(data)  # function to calculate energy tokens
-        state = "ACTIVE"  # initial state of the energy token
+        energy_token = calculate_energy_token(data)
+        state = "ACTIVE"
         block = add_block(data, previous_hash, wallet, energy_token, state)
         blockchain.append(block)
         previous_hash = hashlib.sha256(data.encode()).hexdigest()
